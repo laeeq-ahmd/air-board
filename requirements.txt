@@ -4,3 +4,4 @@ mediapipe
 numpy
 av
 streamlit-webrtc
+opencv-python
