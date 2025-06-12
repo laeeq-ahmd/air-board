@@ -1,52 +1,152 @@
-# app.py
-
 import streamlit as st
 import mediapipe as mp
 import cv2
 import numpy as np
-from PIL import Image
+import time
+import base64
 
 # Page config
-st.set_page_config(page_title="Hand Tracking App", page_icon="🖐️", layout="centered")
+st.set_page_config(page_title="Air Board", page_icon="🖐️", layout="centered")
 
-st.title("🖐️ Real-time Hand Gesture Tracking using MediaPipe")
-st.markdown("This demo captures your hand gestures in real time using your webcam and displays landmarks.")
+# Set blurred background image
+def set_background(image_path):
+    with open(image_path, "rb") as image:
+        encoded = base64.b64encode(image.read()).decode()
 
-# Initialize MediaPipe
+    st.markdown(f"""
+    <style>
+    html, body, .stApp {{
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        background: none;
+    }}
+
+    .stApp::before {{
+        content: "";
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background-image: url("data:image/png;base64,{encoded}");
+        background-size: cover;
+        background-position: center;
+        filter: blur(10px);
+        z-index: -1;
+    }}
+
+    .shrink-title {{
+        animation: shrinkTitle 2s forwards;
+        font-size: 4em;
+        font-weight: bold;
+        color: #6C63FF;
+        text-align: center;
+        margin-top: 35vh;
+        font-family: 'Segoe UI', sans-serif;
+    }}
+
+    @keyframes shrinkTitle {{
+        0% {{ font-size: 4em; margin-top: 35vh; }}
+        100% {{ font-size: 2.6em; margin-top: 10px; }}
+    }}
+
+    .subtitle {{
+        text-align: center;
+        font-size: 1.3em;
+        margin-top: 5px;
+        color: #C4B5FD;
+        font-family: 'Segoe UI', sans-serif;
+    }}
+
+    .stButton button {{
+        background-color: #6C63FF !important;
+        color: white !important;
+        font-weight: bold;
+        padding: 12px 32px;
+        border-radius: 8px;
+        border: none;
+        font-size: 16px;
+        font-family: 'Segoe UI', sans-serif;
+        transition: background-color 0.3s ease;
+        margin-top: 20px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }}
+
+    .stButton button:hover {{
+        background-color: #A66EFF !important;
+    }}
+
+    .stButton button:active,
+    .stButton button:focus:active,
+    .stButton button:focus,
+    .stButton button:visited {{
+        color: #E0E0E0 !important;
+        outline: none !important;
+        box-shadow: none !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+set_background("background.png")
+
+# Title
+st.markdown('<div class="shrink-title">Air Board</div>', unsafe_allow_html=True)
+time.sleep(2.3)
+st.markdown('<div class="subtitle">A touchless drawing interface</div>', unsafe_allow_html=True)
+
+# Session state
+if "camera_on" not in st.session_state:
+    st.session_state.camera_on = False
+
+def start_camera():
+    st.session_state.camera_on = True
+
+def stop_camera():
+    st.session_state.camera_on = False
+
+# Camera Frame
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    FRAME_WINDOW = st.empty()
+
+# MediaPipe setup
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
 
-# Webcam capture function
-def main():
-    run = st.checkbox('Start Camera')
+# Camera loop
+def run_camera():
+    cap = cv2.VideoCapture(0)
 
-    FRAME_WINDOW = st.image([])
+    with mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5) as hands:
+        while st.session_state.camera_on and cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                st.warning("Camera error.")
+                break
 
-    if run:
-        cap = cv2.VideoCapture(0)
+            frame = cv2.resize(frame, (960, 720))
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image.flags.writeable = False
+            results = hands.process(image)
+            image.flags.writeable = True
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-        with mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5) as hands:
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret:
-                    st.warning("Failed to grab frame")
-                    break
+            if results.multi_hand_landmarks:
+                for hand_landmarks in results.multi_hand_landmarks:
+                    mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image.flags.writeable = False
-                results = hands.process(image)
-
-                image.flags.writeable = True
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-
-                # Draw hand landmarks
-                if results.multi_hand_landmarks:
-                    for hand_landmarks in results.multi_hand_landmarks:
-                        mp_drawing.draw_landmarks(
-                            image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-
-                FRAME_WINDOW.image(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            FRAME_WINDOW.image(image, use_container_width=True, channels="BGR")
 
         cap.release()
+        FRAME_WINDOW.empty()
 
-main()
+# Styled and centered button
+with col2:
+    if st.session_state.camera_on:
+        st.button("Stop Camera", on_click=stop_camera)
+    else:
+        st.button("Start Camera", on_click=start_camera)
+
+if st.session_state.camera_on:
+    run_camera()
