@@ -11,7 +11,7 @@ import av
 st.set_page_config(page_title="Air Board", page_icon="🖐️", layout="centered")
 
 # Set blurred background image
-def set_background(image_path="background.png"):
+def set_background(image_path):
     try:
         with open(image_path, "rb") as image:
             encoded = base64.b64encode(image.read()).decode()
@@ -91,25 +91,20 @@ def set_background(image_path="background.png"):
         </style>
         """, unsafe_allow_html=True)
     except FileNotFoundError:
-        st.warning("Background image not found. Please make sure 'background.png' is in the app folder.")
+        st.warning("Background image not found. Please make sure 'background.png' exists.")
 
 # Load background
-set_background()
+set_background("background.png")
 
 # Title
 st.markdown('<div class="shrink-title">Air Board</div>', unsafe_allow_html=True)
 time.sleep(2.3)
 st.markdown('<div class="subtitle">A touchless drawing interface</div>', unsafe_allow_html=True)
 
-# Setup MediaPipe hands only once
-@st.cache_resource
-def load_hand_module():
-    mp_drawing = mp.solutions.drawing_utils
-    mp_hands = mp.solutions.hands
-    hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5)
-    return mp_drawing, mp_hands, hands
-
-mp_drawing, mp_hands, hands = load_hand_module()
+# Setup MediaPipe
+mp_drawing = mp.solutions.drawing_utils
+mp_hands = mp.solutions.hands
+hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5)
 
 # Frame processor using streamlit-webrtc
 def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
@@ -123,7 +118,7 @@ def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
 
     return av.VideoFrame.from_ndarray(image, format="bgr24")
 
-# Centered layout
+# Centered layout for webcam
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     webrtc_streamer(
