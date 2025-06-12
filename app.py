@@ -4,6 +4,8 @@ import cv2
 import numpy as np
 import time
 import base64
+from streamlit_webrtc import webrtc_streamer
+import av
 
 # Page config
 st.set_page_config(page_title="Air Board", page_icon="🖐️", layout="centered")
@@ -88,6 +90,7 @@ def set_background(image_path):
     </style>
     """, unsafe_allow_html=True)
 
+# Load background
 set_background("background.png")
 
 # Title
@@ -95,58 +98,29 @@ st.markdown('<div class="shrink-title">Air Board</div>', unsafe_allow_html=True)
 time.sleep(2.3)
 st.markdown('<div class="subtitle">A touchless drawing interface</div>', unsafe_allow_html=True)
 
-# Session state
-if "camera_on" not in st.session_state:
-    st.session_state.camera_on = False
-
-def start_camera():
-    st.session_state.camera_on = True
-
-def stop_camera():
-    st.session_state.camera_on = False
-
-# Camera Frame
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    FRAME_WINDOW = st.empty()
-
-# MediaPipe setup
+# Setup MediaPipe
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
+hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5)
 
-# Camera loop
-def run_camera():
-    cap = cv2.VideoCapture(0)
+# Frame processor using streamlit-webrtc
+def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
+    image = frame.to_ndarray(format="bgr24")
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    results = hands.process(image_rgb)
 
-    with mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5) as hands:
-        while st.session_state.camera_on and cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                st.warning("Camera error.")
-                break
+    if results.multi_hand_landmarks:
+        for hand_landmarks in results.multi_hand_landmarks:
+            mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-            frame = cv2.resize(frame, (960, 720))
-            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            image.flags.writeable = False
-            results = hands.process(image)
-            image.flags.writeable = True
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    return av.VideoFrame.from_ndarray(image, format="bgr24")
 
-            if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
-                    mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-
-            FRAME_WINDOW.image(image, use_container_width=True, channels="BGR")
-
-        cap.release()
-        FRAME_WINDOW.empty()
-
-# Styled and centered button
+# Centered layout
+col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-    if st.session_state.camera_on:
-        st.button("Stop Camera", on_click=stop_camera)
-    else:
-        st.button("Start Camera", on_click=start_camera)
-
-if st.session_state.camera_on:
-    run_camera()
+    webrtc_streamer(
+        key="airboard",
+        video_frame_callback=video_frame_callback,
+        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+        media_stream_constraints={"video": True, "audio": False},
+    )
