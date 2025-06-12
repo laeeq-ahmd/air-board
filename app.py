@@ -11,97 +11,105 @@ import av
 st.set_page_config(page_title="Air Board", page_icon="🖐️", layout="centered")
 
 # Set blurred background image
-def set_background(image_path):
-    with open(image_path, "rb") as image:
-        encoded = base64.b64encode(image.read()).decode()
+def set_background(image_path="background.png"):
+    try:
+        with open(image_path, "rb") as image:
+            encoded = base64.b64encode(image.read()).decode()
 
-    st.markdown(f"""
-    <style>
-    html, body, .stApp {{
-        height: 100%;
-        margin: 0;
-        padding: 0;
-        background: none;
-    }}
+        st.markdown(f"""
+        <style>
+        html, body, .stApp {{
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background: none;
+        }}
 
-    .stApp::before {{
-        content: "";
-        position: fixed;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        background-image: url("data:image/png;base64,{encoded}");
-        background-size: cover;
-        background-position: center;
-        filter: blur(10px);
-        z-index: -1;
-    }}
+        .stApp::before {{
+            content: "";
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-image: url("data:image/png;base64,{encoded}");
+            background-size: cover;
+            background-position: center;
+            filter: blur(10px);
+            z-index: -1;
+        }}
 
-    .shrink-title {{
-        animation: shrinkTitle 2s forwards;
-        font-size: 4em;
-        font-weight: bold;
-        color: #6C63FF;
-        text-align: center;
-        margin-top: 35vh;
-        font-family: 'Segoe UI', sans-serif;
-    }}
+        .shrink-title {{
+            animation: shrinkTitle 2s forwards;
+            font-size: 4em;
+            font-weight: bold;
+            color: #6C63FF;
+            text-align: center;
+            margin-top: 35vh;
+            font-family: 'Segoe UI', sans-serif;
+        }}
 
-    @keyframes shrinkTitle {{
-        0% {{ font-size: 4em; margin-top: 35vh; }}
-        100% {{ font-size: 2.6em; margin-top: 10px; }}
-    }}
+        @keyframes shrinkTitle {{
+            0% {{ font-size: 4em; margin-top: 35vh; }}
+            100% {{ font-size: 2.6em; margin-top: 10px; }}
+        }}
 
-    .subtitle {{
-        text-align: center;
-        font-size: 1.3em;
-        margin-top: 5px;
-        color: #C4B5FD;
-        font-family: 'Segoe UI', sans-serif;
-    }}
+        .subtitle {{
+            text-align: center;
+            font-size: 1.3em;
+            margin-top: 5px;
+            color: #C4B5FD;
+            font-family: 'Segoe UI', sans-serif;
+        }}
 
-    .stButton button {{
-        background-color: #6C63FF !important;
-        color: white !important;
-        font-weight: bold;
-        padding: 12px 32px;
-        border-radius: 8px;
-        border: none;
-        font-size: 16px;
-        font-family: 'Segoe UI', sans-serif;
-        transition: background-color 0.3s ease;
-        margin-top: 20px;
-        display: block;
-        margin-left: auto;
-        margin-right: auto;
-    }}
+        .stButton button {{
+            background-color: #6C63FF !important;
+            color: white !important;
+            font-weight: bold;
+            padding: 12px 32px;
+            border-radius: 8px;
+            border: none;
+            font-size: 16px;
+            font-family: 'Segoe UI', sans-serif;
+            transition: background-color 0.3s ease;
+            margin-top: 20px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }}
 
-    .stButton button:hover {{
-        background-color: #A66EFF !important;
-    }}
+        .stButton button:hover {{
+            background-color: #A66EFF !important;
+        }}
 
-    .stButton button:active,
-    .stButton button:focus:active,
-    .stButton button:focus,
-    .stButton button:visited {{
-        color: #E0E0E0 !important;
-        outline: none !important;
-        box-shadow: none !important;
-    }}
-    </style>
-    """, unsafe_allow_html=True)
+        .stButton button:active,
+        .stButton button:focus:active,
+        .stButton button:focus,
+        .stButton button:visited {{
+            color: #E0E0E0 !important;
+            outline: none !important;
+            box-shadow: none !important;
+        }}
+        </style>
+        """, unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.warning("Background image not found. Please make sure 'background.png' is in the app folder.")
 
 # Load background
-set_background("background.png")
+set_background()
 
 # Title
 st.markdown('<div class="shrink-title">Air Board</div>', unsafe_allow_html=True)
 time.sleep(2.3)
 st.markdown('<div class="subtitle">A touchless drawing interface</div>', unsafe_allow_html=True)
 
-# Setup MediaPipe
-mp_drawing = mp.solutions.drawing_utils
-mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5)
+# Setup MediaPipe hands only once
+@st.cache_resource
+def load_hand_module():
+    mp_drawing = mp.solutions.drawing_utils
+    mp_hands = mp.solutions.hands
+    hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5)
+    return mp_drawing, mp_hands, hands
+
+mp_drawing, mp_hands, hands = load_hand_module()
 
 # Frame processor using streamlit-webrtc
 def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
